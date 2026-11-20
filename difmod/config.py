@@ -7,7 +7,7 @@ class ModelConfig:
 
     image_size: int = 256
     latent_channels: int = 4
-    text_vocab_size: int = 258
+    text_vocab_size: int = 259
     max_text_length: int = 128
     text_width: int = 192
     model_width: int = 192
@@ -23,5 +23,5 @@ class ModelConfig:
             raise ValueError("model_width must be divisible by attention_heads")
         if self.patch_size < 1:
             raise ValueError("patch_size must be positive")
-        if self.text_vocab_size != 258:
-            raise ValueError("The UTF-8 byte tokenizer currently requires vocab size 258")
+        if self.text_vocab_size != 259:
+            raise ValueError("The UTF-8 byte tokenizer currently requires vocab size 259")

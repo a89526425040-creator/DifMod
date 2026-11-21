@@ -19,6 +19,33 @@ def timestep_embedding(timesteps: torch.Tensor, width: int) -> torch.Tensor:
     return embedding
 
 
+def spatial_embedding(height: int, width: int, channels: int,
+                      device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    """Build a resolution-independent 2D sinusoidal embedding for patch positions."""
+    if channels % 4:
+        raise ValueError("model width must be divisible by 4 for 2D position embeddings")
+    axis_channels = channels // 2
+    quarter = channels // 4
+    frequencies = torch.exp(
+        -math.log(10000.0)
+        * torch.arange(quarter, device=device, dtype=torch.float32)
+        / max(quarter - 1, 1)
+    )
+    y, x = torch.meshgrid(
+        torch.arange(height, device=device, dtype=torch.float32),
+        torch.arange(width, device=device, dtype=torch.float32),
+        indexing="ij",
+    )
+    x_angles = x.reshape(-1, 1) * frequencies.reshape(1, -1)
+    y_angles = y.reshape(-1, 1) * frequencies.reshape(1, -1)
+    position = torch.cat(
+        [torch.sin(x_angles), torch.cos(x_angles),
+         torch.sin(y_angles), torch.cos(y_angles)],
+        dim=-1,
+    )
+    return position.to(dtype=dtype).unsqueeze(0)
+
+
 class FlowBlock(nn.Module):
     def __init__(self, width: int, text_width: int, heads: int) -> None:
         super().__init__()
@@ -57,6 +84,8 @@ class MobileFlowTransformer(nn.Module):
         super().__init__()
         if width % heads or text_width % heads:
             raise ValueError("model width and text width must be divisible by heads")
+        if width % 4:
+            raise ValueError("model width must be divisible by 4 for 2D position embeddings")
         self.latent_channels = latent_channels
         self.patch_size = patch_size
         self.patch_in = nn.Conv2d(
@@ -78,12 +107,17 @@ class MobileFlowTransformer(nn.Module):
         if height % p or width % p:
             raise ValueError("latent height and width must be divisible by patch_size")
         x = self.patch_in(noisy_latents).flatten(2).transpose(1, 2)
+        grid_height, grid_width = height // p, width // p
+        x = x + spatial_embedding(
+            grid_height, grid_width, x.shape[-1], x.device, x.dtype
+        )
         x = x + self.time_mlp(timestep_embedding(timesteps, x.shape[-1])).unsqueeze(1)
         for block in self.blocks:
             x = block(x, text_context, text_mask)
         patches = self.patch_out(self.final_norm(x))
-        gh, gw = height // p, width // p
-        patches = patches.reshape(batch, gh, gw, self.latent_channels, p, p)
+        patches = patches.reshape(
+            batch, grid_height, grid_width, self.latent_channels, p, p
+        )
         return patches.permute(0, 3, 1, 4, 2, 5).reshape(
             batch, self.latent_channels, height, width
         )

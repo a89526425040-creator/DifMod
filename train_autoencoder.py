@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from difmod.config import ModelConfig
 from difmod.data import ImageCaptionDataset
+from difmod.latent_stats import estimate_latent_stats
 from difmod.model import DifMod
 from difmod.objectives import autoencoder_reconstruction_loss
 
@@ -43,15 +44,23 @@ def main() -> None:
                                 enabled=device.type == "cuda"):
                 loss = autoencoder_reconstruction_loss(model, images)
             scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.autoencoder.parameters(), 1.0)
             scaler.step(optimizer)
             scaler.update()
             total += loss.item()
         print(f"epoch={epoch + 1} reconstruction_loss={total / len(loader):.6f}")
 
+    stats_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
+                              num_workers=args.workers, pin_memory=device.type == "cuda")
+    latent_mean, latent_std = estimate_latent_stats(model.autoencoder, stats_loader, device)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"autoencoder": model.autoencoder.state_dict(),
+                "latent_mean": latent_mean.cpu(), "latent_std": latent_std.cpu(),
                 "image_size": args.image_size}, output)
+    print(f"latent_mean={latent_mean.flatten().tolist()}")
+    print(f"latent_std={latent_std.flatten().tolist()}")
     print(f"saved checkpoint: {output}")
 
 

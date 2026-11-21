@@ -62,3 +62,9 @@ python -m scripts.count_parameters
 - The first flow model is a research prototype. It has no quality guarantee.
 - Training scripts currently target a workstation/cloud PyTorch environment, not on-device training.
 - Android export, quantization, and Snapdragon benchmarks are later milestones.
+
+## Google Colab (Android-friendly workflow)
+
+A ready-to-run notebook is available at [notebooks/DifMod_Training.ipynb](notebooks/DifMod_Training.ipynb). Open it in Google Colab, select a GPU runtime, mount Google Drive, and place the dataset in `MyDrive/DifModDataset` with `manifest.jsonl` and its referenced images. The notebook copies the dataset to Colab's temporary disk for faster reads and stores resumable checkpoints in `MyDrive/DifModCheckpoints`.
+
+The notebook starts with deliberately small trial settings (2 autoencoder epochs, 5 flow epochs, batch size 2). These are pipeline smoke-test settings, not sufficient training for a useful general-purpose image generator. Increase training only after checking GPU memory, dataset quality, and autoencoder reconstructions. If the runtime disconnects, reconnect the GPU and rerun the notebook cells; existing checkpoints are resumed automatically.

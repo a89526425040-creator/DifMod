@@ -3,6 +3,7 @@ import torch
 from difmod.autoencoder import LatentAutoencoder
 from difmod.config import ModelConfig
 from difmod.flow_transformer import MobileFlowTransformer, spatial_embedding
+from difmod.model import DifMod
 from difmod.text_encoder import ByteTextEncoder
 from difmod.tokenizer import ByteTokenizer
 
@@ -46,6 +47,20 @@ def test_spatial_embedding_is_resolution_aware():
     assert small.shape == (1, 16, 64)
     assert large.shape == (1, 64, 64)
     assert not torch.equal(small[:, :16], large[:, :16])
+
+
+def test_latent_normalization_round_trip():
+    config = ModelConfig(
+        image_size=32, text_width=32, model_width=32, transformer_depth=1,
+        attention_heads=4, autoencoder_base_channels=8,
+    )
+    model = DifMod(config)
+    mean = torch.tensor([0.2, -0.1, 0.4, 0.0]).view(1, 4, 1, 1)
+    std = torch.tensor([0.5, 1.5, 0.8, 2.0]).view(1, 4, 1, 1)
+    model.set_latent_stats(mean, std)
+    original = torch.randn(2, 4, 4, 4)
+    restored = model.denormalize_latents(model.normalize_latents(original))
+    assert torch.allclose(original, restored, atol=1e-6)
 
 
 def test_config_rejects_invalid_dimensions():

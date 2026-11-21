@@ -20,13 +20,15 @@ def timestep_embedding(timesteps: torch.Tensor, width: int) -> torch.Tensor:
 
 
 class FlowBlock(nn.Module):
-    def __init__(self, width: int, heads: int) -> None:
+    def __init__(self, width: int, text_width: int, heads: int) -> None:
         super().__init__()
         self.norm_self = nn.LayerNorm(width)
         self.self_attention = nn.MultiheadAttention(width, heads, batch_first=True)
         self.norm_cross = nn.LayerNorm(width)
-        self.norm_text = nn.LayerNorm(width)
-        self.cross_attention = nn.MultiheadAttention(width, heads, batch_first=True)
+        self.norm_text = nn.LayerNorm(text_width)
+        self.cross_attention = nn.MultiheadAttention(
+            width, heads, kdim=text_width, vdim=text_width, batch_first=True
+        )
         self.norm_mlp = nn.LayerNorm(width)
         self.mlp = nn.Sequential(
             nn.Linear(width, width * 3),
@@ -38,8 +40,9 @@ class FlowBlock(nn.Module):
                 context_mask: torch.Tensor) -> torch.Tensor:
         q = self.norm_self(x)
         x = x + self.self_attention(q, q, q, need_weights=False)[0]
+        normalized_context = self.norm_text(context)
         x = x + self.cross_attention(
-            self.norm_cross(x), self.norm_text(context), self.norm_text(context),
+            self.norm_cross(x), normalized_context, normalized_context,
             key_padding_mask=~context_mask.bool(), need_weights=False,
         )[0]
         return x + self.mlp(self.norm_mlp(x))
@@ -52,6 +55,8 @@ class MobileFlowTransformer(nn.Module):
                  width: int = 192, depth: int = 4, heads: int = 4,
                  patch_size: int = 2) -> None:
         super().__init__()
+        if width % heads or text_width % heads:
+            raise ValueError("model width and text width must be divisible by heads")
         self.latent_channels = latent_channels
         self.patch_size = patch_size
         self.patch_in = nn.Conv2d(
@@ -60,7 +65,9 @@ class MobileFlowTransformer(nn.Module):
         self.time_mlp = nn.Sequential(
             nn.Linear(width, width * 2), nn.SiLU(), nn.Linear(width * 2, width)
         )
-        self.blocks = nn.ModuleList([FlowBlock(width, heads) for _ in range(depth)])
+        self.blocks = nn.ModuleList(
+            [FlowBlock(width, text_width, heads) for _ in range(depth)]
+        )
         self.final_norm = nn.LayerNorm(width)
         self.patch_out = nn.Linear(width, latent_channels * patch_size * patch_size)
 

@@ -2,7 +2,7 @@ import torch
 
 from difmod.autoencoder import LatentAutoencoder
 from difmod.config import ModelConfig
-from difmod.flow_transformer import MobileFlowTransformer
+from difmod.flow_transformer import MobileFlowTransformer, spatial_embedding
 from difmod.text_encoder import ByteTextEncoder
 from difmod.tokenizer import ByteTokenizer
 
@@ -24,7 +24,7 @@ def test_autoencoder_eight_x_spatial_compression():
     assert reconstructed.shape == images.shape
 
 
-def test_flow_transformer_preserves_latent_shape():
+def test_flow_transformer_preserves_latent_shape_with_different_widths():
     batch = 2
     tokenizer = ByteTokenizer(max_length=32)
     tokens, mask = tokenizer.batch_encode(["a small house", "a blue car"])
@@ -38,6 +38,14 @@ def test_flow_transformer_preserves_latent_shape():
     result = model(latents, times, context, mask)
     assert result.shape == latents.shape
     assert torch.isfinite(result).all()
+
+
+def test_spatial_embedding_is_resolution_aware():
+    small = spatial_embedding(4, 4, 64, torch.device("cpu"), torch.float32)
+    large = spatial_embedding(8, 8, 64, torch.device("cpu"), torch.float32)
+    assert small.shape == (1, 16, 64)
+    assert large.shape == (1, 64, 64)
+    assert not torch.equal(small[:, :16], large[:, :16])
 
 
 def test_config_rejects_invalid_dimensions():

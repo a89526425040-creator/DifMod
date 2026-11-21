@@ -50,6 +50,8 @@ def main() -> None:
                         num_workers=args.workers, pin_memory=device.type == "cuda")
     model = DifMod(ModelConfig(image_size=args.image_size)).to(device)
     autoencoder_state = torch.load(args.autoencoder, map_location="cpu", weights_only=True)
+    if autoencoder_state.get("training_complete", True) is not True:
+        raise ValueError("autoencoder training is not finalized; resume/finish train_autoencoder.py first")
     if "latent_mean" not in autoencoder_state or "latent_std" not in autoencoder_state:
         raise ValueError("autoencoder checkpoint is missing latent statistics; retrain the autoencoder")
     if autoencoder_state.get("image_size", args.image_size) != args.image_size:

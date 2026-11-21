@@ -14,7 +14,7 @@ from difmod.model import DifMod
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train DifMod conditional flow model from scratch.")
     parser.add_argument("--manifest", required=True)
-    parser.add_argument("--autoencoder", required=True, help="trained autoencoder checkpoint")
+    parser.add_argument("--autoencoder", required=True, help="trained autoencoder checkpoint with latent statistics")
     parser.add_argument("--output", default="checkpoints/difmod_flow.pt")
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=4)
@@ -23,13 +23,18 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=2)
     args = parser.parse_args()
 
+    if args.epochs < 1 or args.batch_size < 1:
+        raise ValueError("epochs and batch-size must be positive")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = ImageCaptionDataset(args.manifest, args.image_size)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True,
                         num_workers=args.workers, pin_memory=device.type == "cuda")
     model = DifMod(ModelConfig(image_size=args.image_size)).to(device)
     autoencoder_state = torch.load(args.autoencoder, map_location="cpu", weights_only=True)
+    if "latent_mean" not in autoencoder_state or "latent_std" not in autoencoder_state:
+        raise ValueError("autoencoder checkpoint is missing latent statistics; retrain the autoencoder")
     model.autoencoder.load_state_dict(autoencoder_state["autoencoder"])
+    model.set_latent_stats(autoencoder_state["latent_mean"], autoencoder_state["latent_std"])
     model.autoencoder.eval()
     for parameter in model.autoencoder.parameters():
         parameter.requires_grad_(False)
@@ -61,6 +66,8 @@ def main() -> None:
     torch.save({"text_encoder": model.text_encoder.state_dict(),
                 "flow": model.flow.state_dict(),
                 "autoencoder": model.autoencoder.state_dict(),
+                "latent_mean": model.latent_mean.cpu(),
+                "latent_std": model.latent_std.cpu(),
                 "config": vars(model.config)}, output)
     print(f"saved checkpoint: {output}")
 

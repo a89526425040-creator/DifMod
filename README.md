@@ -18,10 +18,11 @@ The first prototype uses 256×256 training images, an 8× spatial latent compres
 
 ## Repository layout
 
-- `difmod/` — model, tokenizer, flow-matching objective, and training utilities.
-- `tests/` — CPU shape and numerical smoke tests.
+- `difmod/` — model, tokenizer, flow-matching objective, inference, and training utilities.
+- `tests/` — CPU shape, numerical, and checkpoint smoke tests.
 - `configs/` — small starter configuration.
 - `.github/workflows/` — automated tests.
+- `generate_image.py` — command-line image generation from a trained checkpoint.
 
 ## Development
 
@@ -31,6 +32,16 @@ Python 3.11 is recommended.
 python -m pip install -r requirements.txt
 python -m pytest -q
 ```
+
+## Generate an image
+
+After training has produced the complete checkpoint `checkpoints/difmod_flow.pt`, run:
+
+```bash
+python generate_image.py --checkpoint checkpoints/difmod_flow.pt --prompt "a small red car on a country road" --output result.png --steps 20
+```
+
+The script loads the autoencoder, text encoder, flow transformer, and calibrated latent statistics from the unified checkpoint. It saves a PNG image. An untrained or randomly initialized checkpoint will only produce noise-like output; the command does not replace the training step.
 
 ## Training data
 

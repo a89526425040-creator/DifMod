@@ -8,10 +8,12 @@ from .model import DifMod
 @torch.inference_mode()
 def generate_latents(model: DifMod, prompts: list[str], steps: int = 12,
                      seed: int = 0, device: str | torch.device = "cpu") -> torch.Tensor:
-    """Euler-integrate the learned flow field from Gaussian noise to image latents.
+    """Return autoencoder-space latents after integrating in normalized latent space.
 
     Meaningful output requires a trained text encoder, autoencoder, and flow model.
     """
+    if not prompts:
+        raise ValueError("at least one prompt is required")
     if steps < 1:
         raise ValueError("steps must be positive")
     model = model.to(device).eval()
@@ -29,7 +31,7 @@ def generate_latents(model: DifMod, prompts: list[str], steps: int = 12,
         times = torch.full((len(prompts),), t_value, device=device)
         velocity = model.flow(latents, times, context, mask)
         latents = latents + velocity * dt
-    return latents
+    return model.denormalize_latents(latents)
 
 
 @torch.inference_mode()

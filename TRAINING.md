@@ -21,6 +21,14 @@ python train_autoencoder.py --manifest /path/to/manifest.jsonl --epochs 20 --bat
 
 The autoencoder checkpoint contains the trained encoder/decoder and per-channel latent mean and standard deviation measured across the training images. Inspect reconstruction quality before moving on. The initial autoencoder objective is deliberately simple and is not yet perceptually optimized.
 
+Each epoch is saved atomically with the optimizer and mixed-precision scaler state. If training is interrupted, resume from the same output file:
+
+```bash
+python train_autoencoder.py --manifest /path/to/manifest.jsonl --output checkpoints/autoencoder.pt --epochs 20 --batch-size 8 --resume
+```
+
+Here `--epochs` is the total target epoch count. An intermediate checkpoint is marked as unfinished and cannot be used by flow training. Once the requested epochs finish, the script measures latent statistics and marks the checkpoint as finalized. If the process stops after the last epoch save but before finalization, rerunning with `--resume` completes that finalization step.
+
 ## 4. Train the text-conditioned flow model
 
 ```bash

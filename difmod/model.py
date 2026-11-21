@@ -36,6 +36,27 @@ class DifMod(nn.Module):
             heads=self.config.attention_heads,
             patch_size=self.config.patch_size,
         )
+        self.register_buffer("latent_mean", torch.zeros(1, self.config.latent_channels, 1, 1))
+        self.register_buffer("latent_std", torch.ones(1, self.config.latent_channels, 1, 1))
+
+    def set_latent_stats(self, mean: torch.Tensor, std: torch.Tensor) -> None:
+        expected = (1, self.config.latent_channels, 1, 1)
+        mean = mean.detach().to(device=self.latent_mean.device, dtype=self.latent_mean.dtype)
+        std = std.detach().to(device=self.latent_std.device, dtype=self.latent_std.dtype)
+        if tuple(mean.shape) != expected or tuple(std.shape) != expected:
+            raise ValueError(f"latent statistics must have shape {expected}")
+        if not torch.isfinite(mean).all() or not torch.isfinite(std).all():
+            raise ValueError("latent statistics must be finite")
+        if (std <= 1e-6).any():
+            raise ValueError("latent standard deviations must be greater than 1e-6")
+        self.latent_mean.copy_(mean)
+        self.latent_std.copy_(std)
+
+    def normalize_latents(self, latents: torch.Tensor) -> torch.Tensor:
+        return (latents - self.latent_mean) / self.latent_std
+
+    def denormalize_latents(self, latents: torch.Tensor) -> torch.Tensor:
+        return latents * self.latent_std + self.latent_mean
 
     def encode_prompts(self, prompts: list[str], device: torch.device | str
                        ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -44,11 +65,11 @@ class DifMod(nn.Module):
         return self.text_encoder(tokens, mask), mask
 
     def flow_matching_loss(self, images: torch.Tensor, prompts: list[str]) -> torch.Tensor:
-        """Compute conditional flow-matching loss; autoencoder must be pretrained first."""
+        """Compute conditional flow-matching loss in normalized autoencoder latent space."""
         if images.shape[0] != len(prompts):
             raise ValueError("image batch size must match prompt count")
         with torch.no_grad():
-            latents = self.autoencoder.encode(images)
+            latents = self.normalize_latents(self.autoencoder.encode(images))
         context, mask = self.encode_prompts(prompts, images.device)
         noise = torch.randn_like(latents)
         t = torch.rand(images.shape[0], device=images.device)

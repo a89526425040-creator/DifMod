@@ -19,7 +19,7 @@ Create a JSONL manifest as described in [DATASET.md](DATASET.md). Keep the datas
 python train_autoencoder.py --manifest /path/to/manifest.jsonl --epochs 20 --batch-size 8
 ```
 
-This produces `checkpoints/autoencoder.pt`. Inspect reconstruction quality before moving on. The initial autoencoder objective is deliberately simple and is not yet perceptually optimized.
+The autoencoder checkpoint contains the trained encoder/decoder and per-channel latent mean and standard deviation measured across the training images. Inspect reconstruction quality before moving on. The initial autoencoder objective is deliberately simple and is not yet perceptually optimized.
 
 ## 4. Train the text-conditioned flow model
 
@@ -27,7 +27,11 @@ This produces `checkpoints/autoencoder.pt`. Inspect reconstruction quality befor
 python train_flow.py --manifest /path/to/manifest.jsonl --autoencoder checkpoints/autoencoder.pt --epochs 50 --batch-size 8
 ```
 
-This produces `checkpoints/difmod_flow.pt`. Training from scratch needs a sufficiently large, diverse, legally usable dataset and substantial compute. A small test dataset only verifies that the pipeline runs.
+Flow matching is performed in normalized latent space: the saved channel statistics make the autoencoder latents approximately zero-mean and unit-scale. Sampling starts from standard Gaussian noise and converts the final latents back to the autoencoder's original scale before decoding.
+
+This is a practical calibration baseline, not a guarantee that every latent channel is perfectly Gaussian. The statistics are estimated over the supplied training set and should be recalculated if the autoencoder or dataset changes.
+
+The flow checkpoint includes the autoencoder, text encoder, flow transformer, and latent statistics. This makes inference self-contained once a checkpoint has been trained.
 
 ## 5. Measure model size
 

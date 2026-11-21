@@ -82,6 +82,10 @@ def main() -> None:
         if start_epoch < 0:
             raise ValueError("resume checkpoint has an invalid epoch")
         print(f"resumed from epoch {start_epoch}")
+        if start_epoch > args.epochs:
+            raise ValueError(
+                f"checkpoint is already at epoch {start_epoch}, beyond target --epochs {args.epochs}"
+            )
 
     for epoch in range(start_epoch, args.epochs):
         model.autoencoder.train()

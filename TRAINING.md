@@ -27,11 +27,19 @@ The autoencoder checkpoint contains the trained encoder/decoder and per-channel 
 python train_flow.py --manifest /path/to/manifest.jsonl --autoencoder checkpoints/autoencoder.pt --epochs 50 --batch-size 8
 ```
 
+A complete checkpoint is saved atomically after every epoch, including the optimizer and mixed-precision scaler states. If a run is interrupted, repeat the command with `--resume`:
+
+```bash
+python train_flow.py --manifest /path/to/manifest.jsonl --autoencoder checkpoints/autoencoder.pt --output checkpoints/difmod_flow.pt --epochs 50 --batch-size 8 --resume
+```
+
+Here `--epochs` is the total target epoch, not the number of additional epochs. For example, if the saved checkpoint is at epoch 12 and `--epochs 50` is specified, training continues at epoch 13 and stops at 50. The resume loader checks the model configuration and latent calibration before restoring the optimizer and scaler. Keep the same autoencoder checkpoint, image size, and compatible training setup when resuming.
+
 Flow matching is performed in normalized latent space: the saved channel statistics make the autoencoder latents approximately zero-mean and unit-scale. Sampling starts from standard Gaussian noise and converts the final latents back to the autoencoder's original scale before decoding.
 
 This is a practical calibration baseline, not a guarantee that every latent channel is perfectly Gaussian. The statistics are estimated over the supplied training set and should be recalculated if the autoencoder or dataset changes.
 
-The flow checkpoint includes the autoencoder, text encoder, flow transformer, and latent statistics. This makes inference self-contained once a checkpoint has been trained.
+The flow checkpoint includes the autoencoder, text encoder, flow transformer, latent statistics, and resume state. It is self-contained for inference and can also be resumed for training.
 
 ## 5. Measure model size
 

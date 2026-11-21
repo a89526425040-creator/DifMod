@@ -28,10 +28,10 @@ def test_flow_transformer_preserves_latent_shape():
     batch = 2
     tokenizer = ByteTokenizer(max_length=32)
     tokens, mask = tokenizer.batch_encode(["a small house", "a blue car"])
-    text = ByteTextEncoder(vocab_size=259, width=64, max_length=32, layers=1, heads=4)
+    text = ByteTextEncoder(vocab_size=259, width=48, max_length=32, layers=1, heads=4)
     context = text(tokens, mask)
     model = MobileFlowTransformer(
-        latent_channels=4, text_width=64, width=64, depth=2, heads=4, patch_size=2
+        latent_channels=4, text_width=48, width=64, depth=2, heads=4, patch_size=2
     )
     latents = torch.randn(batch, 4, 8, 8)
     times = torch.rand(batch)
@@ -48,3 +48,13 @@ def test_config_rejects_invalid_dimensions():
         pass
     else:
         raise AssertionError("invalid image_size should be rejected")
+
+
+def test_config_rejects_incompatible_text_width():
+    config = ModelConfig(text_width=190, attention_heads=4)
+    try:
+        config.validate()
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("incompatible text_width should be rejected")
